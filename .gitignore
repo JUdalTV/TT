@@ -8,6 +8,3 @@ venv/
 env/
 __pycache__/
 
-# Bỏ qua các file dữ liệu lớn hoặc file tạm
-*.pdf
-*.json
