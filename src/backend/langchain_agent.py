@@ -14,7 +14,7 @@ if not os.getenv("GEMINI_API_KEY") or not os.getenv("NEO4J_PASSWORD"):
     raise ValueError("Thiếu API Key hoặc Mật khẩu Neo4j trong file .env!")
 
 # ==========================================
-# 2. KHỞI TẠO BỘ NÃO (GEMINI) VÀ NHÀ KHO (NEO4J)
+# 2. KHỞI TẠO GEMINI VÀ NEO4J
 # ==========================================
 print("Đang khởi động AI và kết nối Database...")
 
@@ -31,7 +31,7 @@ graph = Neo4jGraph(
 # ==========================================
 # 3. TẠO PROMPT ÉP AI TRẢ LỜI TIẾNG VIỆT
 # ==========================================
-# Đôi khi AI tự động dịch sang tiếng Anh, ta cần ép nó dùng tiếng Việt
+
 QA_PROMPT_TEMPLATE = """Bạn là một chuyên gia tư vấn Luật An ninh mạng Việt Nam. 
 Hệ thống đã tự động quét đồ thị và trả về dữ liệu thô ở phần "Thông tin từ Database" bên dưới.
 
@@ -81,7 +81,7 @@ chain = GraphCypherQAChain.from_llm(
     cypher_llm=llm,          # Dùng Gemini để dịch Tiếng Việt sang lệnh Cypher
     qa_llm=llm,              # Dùng Gemini để tóm tắt kết quả thành câu trả lời
     graph=graph,             # Kết nối với Neo4j
-    verbose=True,            # BẬT TRUE ĐỂ XEM AI TỰ VIẾT CODE CYPHER NHƯ THẾ NÀO (Rất hay!)
+    verbose=True,            #  XEM AI TỰ VIẾT CODE CYPHER 
     qa_prompt=QA_PROMPT,
     cypher_prompt=CYPHER_PROMPT,
     return_intermediate_steps=True,

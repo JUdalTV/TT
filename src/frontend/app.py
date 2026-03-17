@@ -29,7 +29,7 @@ def init_graph_chain():
         st.error("⚠️ Thiếu API Key hoặc Mật khẩu Neo4j trong file .env!")
         st.stop()
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
     graph = Neo4jGraph(
         url=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
@@ -37,7 +37,6 @@ def init_graph_chain():
         password=os.getenv("NEO4J_PASSWORD")
     )
 
-    # Prompt dịch Cypher (Phiên bản đã tối ưu ở Tuần 6)
     CYPHER_PROMPT = PromptTemplate(
         input_variables=["schema", "question"], 
         template="""Bạn là một chuyên gia về Neo4j Cypher.
@@ -45,15 +44,45 @@ def init_graph_chain():
         Chỉ sử dụng các Node và Relationship có trong Schema dưới đây:
         {schema}
         
-        QUY TẮC BẮT BUỘC:
-        1. KHI TÌM TÊN: Dùng toLower() và CONTAINS. Tránh nhầm lẫn 'Điều 1' với 'Điều 10'.
-        2. KHI HỎI VỀ "NỘI DUNG": KHÔNG ĐƯỢC chỉ RETURN tên của node (Ví dụ: CẤM chỉ RETURN k.name).
-        3. Bạn BẮT BUỘC phải MATCH các node liên kết xung quanh nó và trả về các mối quan hệ.
+        QUY TẮC BẮT BUỘC ĐỂ TRẢ LỜI CHÍNH XÁC:
+        1. PHÂN BIỆT THUỘC TÍNH: 
+           - Node [Dieu, Khoan, Diem, KhaiNiem]: BẮT BUỘC RETURN n.raw_content.
+           - Node [TrachNhiem, HanhViCam, ChuThe...]: BẮT BUỘC RETURN n.name.
+        2. TỪ KHÓA NHẬP NHẰNG: Nếu hỏi "Điều khoản 1", hãy hiểu là "Điều 1".
+        
+        --- VÍ DỤ MẪU ---
+        Ví dụ 1: Hỏi về nội dung Điều/Khoản (Dùng raw_content)
+        Câu hỏi: "Nội dung điều 1 là gì?"
+        Cypher:
+        MATCH (d:Dieu)
+        WHERE toLower(d.name) = 'điều 1' OR toLower(d.name) CONTAINS 'điều 1.'
+        RETURN d.raw_content AS NoiDungChinhXac
+        
+        Ví dụ 2: Hỏi về Trách nhiệm / Hành vi cấm (Chỉ dùng name)
+        Câu hỏi: "Bộ công an có trách nhiệm gì?"
+        Cypher:
+        MATCH (c:ChuThe)-[:THUC_HIEN|QUY_DINH_TRACH_NHIEM]->(t:TrachNhiem)
+        WHERE toLower(c.name) CONTAINS 'bộ công an'
+        RETURN t.name AS NoiDungChinhXac
+        
+        Ví dụ 3: Hỏi tình huống thực tế / Hỏi xem có vi phạm không (QUÉT RỘNG TỪ KHÓA)
+        Câu hỏi: "Nếu bây giờ tôi xúc phạm người khác trên mạng thì có vi phạm không?"
+        Cypher:
+        // QUAN TRỌNG: Không dùng mũi tên MATCH nối dài để tránh đứt gãy. Quét tất cả các node liên quan.
+        // Tự động phân tích từ khóa tình huống thành các từ đồng nghĩa (ví dụ: xúc phạm, làm nhục, danh dự, vu khống)
+        MATCH (n)
+        WHERE (n:HanhViCam OR n:Khoan OR n:Dieu OR n:Diem)
+          AND (toLower(n.name) CONTAINS 'xúc phạm' 
+               OR toLower(n.name) CONTAINS 'làm nhục' 
+               OR toLower(n.name) CONTAINS 'danh dự'
+               OR toLower(n.raw_content) CONTAINS 'xúc phạm'
+               OR toLower(n.raw_content) CONTAINS 'danh dự')
+        RETURN labels(n)[0] AS LoaiQuyDinh, n.name AS Ten, n.raw_content AS NoiDungChiTiet LIMIT 10
+        ------------------------------------------------
         
         Câu hỏi: {question}
         Câu lệnh Cypher:"""
     )
-
     # Prompt trả lời tiếng Việt
     QA_PROMPT = PromptTemplate(
         input_variables=["context", "question"], 
@@ -61,8 +90,9 @@ def init_graph_chain():
         Hệ thống đã tự động quét đồ thị và trả về dữ liệu thô ở phần "Thông tin từ Database".
         
         LƯU Ý CỰC KỲ QUAN TRỌNG: 
-        1. HÃY TIN TƯỞNG TUYỆT ĐỐI dữ liệu này. Viết lại thành câu trả lời tiếng Việt mạch lạc, dễ hiểu, trình bày dạng gạch đầu dòng.
-        2. Nếu dữ liệu thô là rỗng ([]), hãy nói "Tôi không tìm thấy thông tin này trong hệ thống".
+        1. HÃY TIN TƯỞNG TUYỆT ĐỐI dữ liệu này. 
+        2. LỆNH TRÍCH DẪN: Nếu trong Thông tin từ Database có chứa trường 'NoiDungChinhXac' hoặc 'raw_content', bạn BẮT BUỘC phải trích dẫn nguyên văn câu chữ đó, chỉ được thêm các ký tự gạch đầu dòng cho đẹp mắt, TUYỆT ĐỐI KHÔNG được tự ý xào nấu hoặc sửa đổi từ ngữ pháp lý.
+        3. Nếu dữ liệu thô là rỗng ([]), hãy nói "Tôi không tìm thấy thông tin này trong hệ thống".
         
         Thông tin từ Database:
         {context}

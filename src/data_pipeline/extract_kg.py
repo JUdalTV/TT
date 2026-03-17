@@ -18,28 +18,62 @@ genai.configure(api_key=API_KEY)
 # SỬA LẠI TÊN MODEL CHUẨN ĐANG HOẠT ĐỘNG
 model = genai.GenerativeModel('gemini-2.5-flash') 
 
-SYSTEM_PROMPT = """
-Bạn là một chuyên gia AI về Kỹ thuật tri thức. Hãy đọc văn bản luật và trích xuất Thực thể (Nodes) và Quan hệ (Edges) theo định dạng JSON.
+SYSTEM_PROMPT = """Bạn là một chuyên gia pháp lý và Data Engineer siêu việt. Nhiệm vụ của bạn là đọc các Điều luật An ninh mạng và trích xuất ra một Knowledge Graph (Đồ thị tri thức) dưới định dạng JSON.
 
-DANH SÁCH BẮT BUỘC (KHÔNG DÙNG TỪ KHÁC):
-- Node Labels: VanBanLuat, Chuong, Dieu, Khoan, KhaiNiem, ChuThe, HanhViCam, HeThongThongTin, BienPhapBaoVe, TrachNhiem, NghiaVu, SanPhamDichVu.
-- Edge Types: BAO_GOM, DINH_NGHIA, NGHIEM_CAM, QUY_DINH_TRACH_NHIEM, THUC_HIEN, AP_DUNG, PHOI_HOP_VOI, CUNG_CAP, QUAN_LY, GAY_HAI_CHO, BAO_VE, IS_A.
+TUYỆT ĐỐI TUÂN THỦ CÁC QUY TẮC SAU:
+1. KHÔNG ĐƯỢC TÓM TẮT: Phải giữ nguyên văn các từ khóa quan trọng. Không được gộp các hành vi hoặc trách nhiệm lại với nhau.
+2. PHÂN CẤP TRIỆT ĐỂ (QUAN TRỌNG NHẤT): 
+   - Nếu Điều luật có các Khoản (1, 2, 3...), bạn BẮT BUỘC phải tạo các Node riêng biệt có label là "Khoan" (VD: name: "Khoản 1 Điều 10").
+   - Nếu Khoản có các Điểm (a, b, c...), BẮT BUỘC phải tạo Node label là "Diem" (VD: name: "Điểm a Khoản 1 Điều 10").
+   - Dùng quan hệ "BAO_GOM" để nối Điều -> Khoản, và Khoản -> Điểm.
+3. GẮN ĐÚNG CHỖ: Mọi Node như "HanhViCam", "TrachNhiem", "ChuThe" phải được nối trực tiếp vào cái "Khoan" hoặc "Diem" chứa nó, KHÔNG ĐƯỢC nối chung chung vào "Dieu".
+4. LƯU GIỮ NGUYÊN VĂN (CỰC KỲ QUAN TRỌNG): Đối với các Node là "Dieu", "Khoan", "Diem", "KhaiNiem", bạn BẮT BUỘC phải tạo thêm một thuộc tính là "raw_content" và copy y xì đúc, không sai một dấu phẩy nội dung gốc của phần đó vào đây.
 
-QUY TẮC:
-1. Không bịa đặt thông tin.
-2. Tên Node (name) phải ngắn gọn, súc tích.
-3. Nếu văn bản ghi "Luật này", hãy ghi rõ là "Luật An ninh mạng".
+DANH SÁCH NODE LABELS CHO PHÉP:
+- Dieu (Điều luật)
+- Khoan (Khoản)
+- Diem (Điểm)
+- ChuThe (Ví dụ: Bộ Công an, Doanh nghiệp cung cấp dịch vụ...)
+- HanhViCam (Hành vi bị nghiêm cấm)
+- TrachNhiem (Trách nhiệm, nghĩa vụ phải làm)
+- BienPhapBaoVe (Các biện pháp bảo vệ an ninh mạng)
+- KhaiNiem (Giải thích từ ngữ)
+- HeThongThongTin (Hệ thống thông tin quan trọng...)
 
-CẤU TRÚC JSON BẮT BUỘC TRẢ VỀ:
+DANH SÁCH RELATIONSHIP CHO PHÉP:
+- BAO_GOM (Điều -> Khoản, Khoản -> Điểm)
+- QUY_DINH_TRACH_NHIEM (Khoản/Điểm -> TrachNhiem)
+- NGHIEM_CAM (Khoản/Điểm -> HanhViCam)
+- THUC_HIEN (ChuThe -> TrachNhiem / BienPhapBaoVe)
+- AP_DUNG (Khoản/Điểm -> BienPhapBaoVe)
+- DINH_NGHIA (Khoản -> KhaiNiem)
+
+ĐẦU RA BẮT BUỘC TRẢ VỀ CHUẨN JSON CÓ DẠNG:
 {
-  "nodes": [{"id": "duy_nhat", "label": "Nhan", "name": "Ten"}],
-  "edges": [{"source": "id_nguon", "target": "id_dich", "type": "LOAI_QUAN_HE"}]
+  "nodes": [
+    {
+      "id": "node_1", 
+      "label": "Khoan", 
+      "name": "Khoản 1 Điều 10",
+      "raw_content": "1. Hệ thống thông tin quan trọng về an ninh quốc gia là hệ thống thông tin khi bị sự cố, xâm nhập, chiếm quyền điều khiển..."
+    }
+  ],
+  "edges": [{"source": "node_1", "target": "node_2", "type": "BAO_GOM"}]
 }
 """
 
 def extract_graph_from_text(text_content):
     """Gửi nội dung luật cho Gemini và nhận về JSON Graph (Tích hợp Exponential Backoff)"""
-    full_prompt = f"{SYSTEM_PROMPT}\n\nVĂN BẢN CẦN TRÍCH XUẤT:\n{text_content}"
+    
+    # ==========================================
+    user_prompt = f"""Hãy trích xuất đồ thị tri thức cho Điều luật sau. 
+    CHÚ Ý: Hãy quét thật kỹ từng Khoản, từng Điểm (nếu có) và tạo Node tương ứng. Không được bỏ sót bất kỳ hành vi cấm hay trách nhiệm nào.
+
+    Nội dung Điều luật:
+    {text_content}
+    """
+    
+    full_prompt = f"{SYSTEM_PROMPT}\n\n{user_prompt}"
     
     max_retries = 3 
     base_sleep_time = 60 # Thời gian nghỉ cơ bản là 60 giây
@@ -59,9 +93,9 @@ def extract_graph_from_text(text_content):
         except Exception as e:
             error_msg = str(e)
             if "429" in error_msg or "Quota" in error_msg:
-                # Kỹ thuật Exponential Backoff: Lần 1 đợi 60s, Lần 2 đợi 120s, Lần 3 đợi 240s
+                # Kỹ thuật Exponential Backoff
                 sleep_time = base_sleep_time * (2 ** attempt)
-                print(f"  [!] Đụng giới hạn API (Rate limit). Đang nghỉ {sleep_time} giây trước khi thử lại... (Lần {attempt + 1}/{max_retries})")
+                print(f"  [!] Đụng giới hạn API. Đang nghỉ {sleep_time} giây trước khi thử lại... (Lần {attempt + 1}/{max_retries})")
                 time.sleep(sleep_time) 
             else:
                 print(f"  [!] Lỗi không xác định: {error_msg}")
@@ -71,7 +105,7 @@ def extract_graph_from_text(text_content):
     return None
 
 def main():
-    # 1. Đọc file JSON dữ liệu thô (Source)
+    # 1. Đọc file JSON Source
     try:
         with open('data/processData/luatanm2025_processed.json', 'r', encoding='utf-8') as f:
             raw_data = json.load(f)
@@ -103,10 +137,10 @@ def main():
             article_id = article.get("article_id")
             article_title = article.get("article_title", "")
             
-            # KỸ THUẬT RESUME: Kiểm tra xem Điều này đã trích xuất thành công chưa
+            # Kiểm tra xem Điều này đã trích xuất thành công chưa
             if article_id in extracted_article_ids:
                 print(f" -> Bỏ qua: {article_title} (Đã có sẵn)")
-                continue # Nhảy qua vòng lặp tiếp theo, không gọi Gemini nữa
+                continue 
             
             # Gộp text của toàn bộ các khoản trong 1 điều
             clauses_text = "\n".join([c.get("text", "") for c in article.get("clauses", [])])

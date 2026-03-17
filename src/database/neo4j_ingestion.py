@@ -25,35 +25,35 @@ def ingest_data(tx, graph_data):
     nodes = graph_data.get("nodes", [])
     edges = graph_data.get("edges", [])
 
-    # Tạo từ điển (Dictionary) để map ID cục bộ của JSON với Tên thực thể
-    # Kỹ thuật này giúp gộp các node trùng tên (Ví dụ: "Bộ Công an" ở nhiều điều luật sẽ là 1 node)
     id_to_node = {}
     
     # --- XỬ LÝ NODES ---
     for node in nodes:
         node_id = node.get("id")
-        # Chuẩn hóa nhãn (label) không có khoảng trắng
         label = node.get("label", "Khac").replace(" ", "_") 
         name = node.get("name", "").strip()
         
+        # BƯỚC 2: Lấy nội dung gốc từ JSON (nếu không có thì để trống)
+        raw_content = node.get("raw_content", "").strip()
+        
         id_to_node[node_id] = {"label": label, "name": name}
 
-        # Dùng lệnh MERGE của Cypher: Nếu Node có tên này chưa tồn tại thì tạo mới, có rồi thì bỏ qua
-        query = f"MERGE (n:{label} {{name: $name}})"
-        tx.run(query, name=name)
+        query = f"""
+        MERGE (n:{label} {{name: $name}})
+        SET n.raw_content = $raw_content
+        """
+        tx.run(query, name=name, raw_content=raw_content)    
 
-    # --- XỬ LÝ EDGES (QUAN HỆ) ---
+    # --- XỬ LÝ EDGES (QUAN HỆ) --- 
     for edge in edges:
         source_id = edge.get("source")
         target_id = edge.get("target")
-        # Chuẩn hóa tên quan hệ: VIẾT HOA và dùng DẤU GẠCH DƯỚI
         rel_type = edge.get("type", "LIEN_QUAN").replace(" ", "_").upper()
 
         if source_id in id_to_node and target_id in id_to_node:
             source_node = id_to_node[source_id]
             target_node = id_to_node[target_id]
 
-            # Dùng MATCH để tìm 2 Node đã tạo, sau đó MERGE để nối dây giữa chúng
             query = f"""
             MATCH (a:{source_node['label']} {{name: $source_name}})
             MATCH (b:{target_node['label']} {{name: $target_name}})
@@ -62,7 +62,7 @@ def ingest_data(tx, graph_data):
             tx.run(query, source_name=source_node['name'], target_name=target_node['name'])
 
 # ==========================================
-# 3. HÀM CHÍNH (MAIN)
+# 3.HÀM MAIN
 # ==========================================
 def main():
     file_path = "data/processData/extracted_knowledge_graph.json"
