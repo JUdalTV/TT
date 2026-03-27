@@ -149,7 +149,6 @@ if prompt := st.chat_input("Nhập câu hỏi của bạn (VD: Bộ Công an có
                 # Lưu vào lịch sử
                 st.session_state.messages.append({"role": "assistant", "content": answer})
                 
-                # (Tùy chọn) Hiển thị code Cypher ở chế độ gập lại để Demo cho hội đồng
                 with st.expander("Xem chi tiết truy vấn Cypher & Data"):
                     st.code(response['intermediate_steps'][0]['query'], language='cypher')
                     st.json(response['intermediate_steps'][1]['context'])

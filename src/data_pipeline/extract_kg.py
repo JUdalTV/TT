@@ -15,7 +15,7 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 
-# SỬA LẠI TÊN MODEL CHUẨN ĐANG HOẠT ĐỘNG
+
 model = genai.GenerativeModel('gemini-2.5-flash') 
 
 SYSTEM_PROMPT = """Bạn là một chuyên gia pháp lý và Data Engineer siêu việt. Nhiệm vụ của bạn là đọc các Điều luật An ninh mạng và trích xuất ra một Knowledge Graph (Đồ thị tri thức) dưới định dạng JSON.
