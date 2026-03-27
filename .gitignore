@@ -1,8 +1,5 @@
-# Created by venv; see https://docs.python.org/3/library/venv.html
-# Bỏ qua file môi trường (chứa mật khẩu, API key)
+.gitignore
 .env
-
-# Bỏ qua thư mục môi trường ảo Python
 .venv/
 venv/
 env/
