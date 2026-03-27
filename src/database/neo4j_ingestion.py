@@ -85,7 +85,7 @@ def main():
             
             graph = item.get("graph", {})
             if graph:
-                # Chạy hàm ingest_data bên trong một transaction của Neo4j
+                # Chạy hàm ingest_data bên trong một transaction của Neo4j để có tính toàn vẹn dữ liệu
                 session.execute_write(ingest_data, graph)
 
     print("\nTuyệt vời! Đã nạp thành công toàn bộ dữ liệu lên Neo4j.")
